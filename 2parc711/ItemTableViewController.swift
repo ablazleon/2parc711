@@ -18,7 +18,7 @@ class ItemTableViewController: UITableViewController {
 
     let URLBASE = "https://www.dit.upm.es/santiago/examen/datos711.json"
     var items = [Item]()
-    
+    var imagesCache = [String:UIImage]()
     
     @IBOutlet weak var img1View: UIImageView!
     
@@ -29,6 +29,7 @@ class ItemTableViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         updateItems()
+        tableView.estimatedRowHeight = 120
     }
 
     override func didReceiveMemoryWarning() {
@@ -56,7 +57,17 @@ class ItemTableViewController: UITableViewController {
 
         let item = items[indexPath.row]
         cell.urlLabel?.text = item.title
-        print(item.title)
+        // print(item.title)
+        
+        let imgurl1 = items[indexPath.row].image1
+        if let img1 = imagesCache[imgurl1] {
+            cell.img1View.image = img1
+            print(imgurl1)
+        } else {
+            updateImage(urls: imgurl1, indexPath: indexPath)
+        }
+        
+        
         
         return cell
     }
@@ -148,14 +159,53 @@ class ItemTableViewController: UITableViewController {
             } else {
                 print("Bad decoding")
             }
-        
-            
-        
-        
         }
+    }
+    
+    // Update teh images cache
+    func updateImage(urls: String, indexPath: IndexPath){
         
+        // 1. Get url and escaped it, in a global queue
         
-        
+        // DispatchQueue.global().async {
+            guard let urlEscaped = urls.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+                print( "Bad escaping")
+                return
+            }
+            guard let url = URL(string: urlEscaped) else { print("Bad URL"); return }
+            
+            // 2. Get data, using a data task
+            
+            let session = URLSession(configuration: URLSessionConfiguration.default)
+            DispatchQueue.main.async{
+                UIApplication.shared.isNetworkActivityIndicatorVisible = true
+            }
+            let task = session.downloadTask(with: url) { (location: URL?,
+                                                          response: URLResponse?,
+                                                          error: Error?) in
+                guard error == nil && (response as! HTTPURLResponse).statusCode == 200 else {
+                    print("Bad downloading"); return
+                }
+                guard let data = try? Data(contentsOf: location!) else { print("Bada data"); return}
+                
+                // 3. Trasnform it to image
+                
+                let img = UIImage(data: data)
+                
+                // 4. Store it in img cache
+                DispatchQueue.main.async{
+                    self.imagesCache[urls] = img
+                    
+                    // 5. Reload rows
+                    
+                    print(indexPath)
+                    self.tableView.reloadRows(at: [indexPath], with: .fade)
+                    // print(urls)
+                    UIApplication.shared.isNetworkActivityIndicatorVisible = false
+                }
+            }
+            task.resume()
+        //}
     }
     
 }
